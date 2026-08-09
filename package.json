@@ -5,11 +5,14 @@
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "bin": {
+    "envsync": "dist/cli.js"
+  },
   "exports": {
     ".": {
-      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     }
   },
   "scripts": {
@@ -28,7 +31,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "commander": "^14.0.3",
     "dotenv": "^16.4.5",
+    "jiti": "^2.7.0",
     "picocolors": "^1.1.0"
   },
   "devDependencies": {
