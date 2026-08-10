@@ -1,4 +1,4 @@
-import chokidar from "chokidar";
+import chokidar, { FSWatcher } from "chokidar";
 import { EventEmitter } from "events";
 import pc from "picocolors";
 import fs from "fs";
@@ -16,7 +16,7 @@ export interface WatcherOptions {
 }
 
 export class EnvSyncWatcher extends EventEmitter {
-  private watcher: chokidar.FSWatcher | null = null;
+  private watcher: FSWatcher | null = null;
   private options: WatcherOptions;
   private previousData: Record<string, any> = {};
 
@@ -54,12 +54,12 @@ export class EnvSyncWatcher extends EventEmitter {
     // Do an initial build
     this.rebuild();
 
-    this.watcher.on("change", (changedPath) => {
+    this.watcher.on("change", (changedPath: string) => {
       console.log(pc.yellow(`\nFile changed: ${path.basename(changedPath)}`));
       this.rebuild();
     });
 
-    this.watcher.on("add", (addedPath) => {
+    this.watcher.on("add", (addedPath: string) => {
       console.log(pc.green(`\nFile added: ${path.basename(addedPath)}`));
       this.rebuild();
     });

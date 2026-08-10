@@ -104,3 +104,24 @@ export function printErrors(serverErrors: ValidationError[], clientErrors: Valid
     }
   }
 }
+
+import jiti from "jiti";
+import path from "path";
+import fs from "fs";
+
+export function loadEnv(configPath?: string) {
+  const p = configPath || path.resolve(process.cwd(), "envsync.config.ts");
+  if (!fs.existsSync(p)) {
+    throw new Error(`❌ envsync.config.ts not found at ${p}`);
+  }
+  const loadConfig = jiti(process.cwd(), { interopDefault: true });
+  const config = loadConfig(p) as SchemaConfig;
+  const { server, client, success } = validateSchema(config);
+  
+  if (!success) {
+    printErrors(server.errors, client.errors);
+    throw new Error("❌ Environment validation failed.");
+  }
+  
+  return { serverEnv: server.data, clientEnv: client.data };
+}
