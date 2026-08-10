@@ -132,4 +132,14 @@ program
     console.log(pc.blue(`Generated typed files in ${outDir}`));
   });
 
+program
+  .command("watch")
+  .description("Watch environment and schema files for changes and regenerate automatically")
+  .action(async () => {
+    // We must import it dynamically or ensure it doesn't fail if dependencies are missing, but watch is part of the CLI.
+    const { EnvSyncWatcher } = await import("./watch");
+    const watcher = new EnvSyncWatcher();
+    await watcher.start();
+  });
+
 program.parse(process.argv);

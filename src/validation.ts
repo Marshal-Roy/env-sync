@@ -8,6 +8,25 @@ const PREFIX_MAP: Record<Exclude<Framework, "none">, string> = {
   nuxt: "NUXT_PUBLIC_",
 };
 
+function levenshtein(a: string, b: string): number {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
 export function validateField(ctx: ValidationContext): ValidationError[] {
   const errors: ValidationError[] = [];
   const { key, value, def, isClient, framework, autoPrefix } = ctx;
@@ -16,9 +35,20 @@ export function validateField(ctx: ValidationContext): ValidationError[] {
   if (isClient && framework && framework !== "none" && !autoPrefix) {
     const requiredPrefix = PREFIX_MAP[framework as keyof typeof PREFIX_MAP];
     if (requiredPrefix && !key.startsWith(requiredPrefix)) {
+      // Typo detection
+      // Check if the key starts with a typo of the prefix
+      const keyPrefix = key.split("_")[0] + "_"; // e.g. "NEXT_"
+      const distance = levenshtein(keyPrefix, requiredPrefix);
+      
+      let suggestion = `Rename it to "${requiredPrefix}${key}"`;
+      if (distance > 0 && distance <= 7 && requiredPrefix.startsWith(keyPrefix.replace("_", ""))) {
+        // Close enough prefix typo
+        suggestion = `Did you mean "${requiredPrefix}${key.slice(keyPrefix.length)}"?`;
+      }
+
       errors.push({
         key,
-        message: `Client variable "${key}" is missing the required "${requiredPrefix}" prefix for ${framework} projects. Rename it to "${requiredPrefix}${key}" or move it to the server block.`
+        message: `Client variable "${key}" is missing the required "${requiredPrefix}" prefix for ${framework} projects. ${suggestion} or move it to the server block.`
       });
     }
   }
