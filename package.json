@@ -38,7 +38,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "release": "npm run build && changeset publish"
   },
   "keywords": [
     "env",
@@ -46,10 +47,21 @@
     "typescript",
     "validation",
     "schema",
-    "process.env"
+    "process.env",
+    "nextjs",
+    "vite",
+    "nestjs"
   ],
-  "author": "",
+  "author": "Himanshu Roy",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Marshal-Roy/env-sync.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "dependencies": {
     "chokidar": "^4.0.3",
     "commander": "^14.0.3",
@@ -58,6 +70,7 @@
     "picocolors": "^1.1.0"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.1",
     "@nestjs/common": "^11.1.29",
     "@types/node": "^22.1.0",
     "next": "^16.3.0",
