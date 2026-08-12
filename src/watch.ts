@@ -89,7 +89,9 @@ export class EnvSyncWatcher extends EventEmitter {
       
       if (!success) {
         printErrors(server.errors, client.errors);
-        this.emit("error", { serverErrors: server.errors, clientErrors: client.errors });
+        if (this.listenerCount("error") > 0) {
+          this.emit("error", { serverErrors: server.errors, clientErrors: client.errors });
+        }
         return;
       }
 
@@ -107,7 +109,9 @@ export class EnvSyncWatcher extends EventEmitter {
     } catch (e: any) {
       console.error(pc.red("❌ Failed to rebuild environment"));
       console.error(e.message);
-      this.emit("error", e);
+      if (this.listenerCount("error") > 0) {
+        this.emit("error", e);
+      }
     }
   }
 

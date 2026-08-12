@@ -3,6 +3,7 @@ import { defineConfig } from "tsup";
 export default defineConfig({
   entry: [
     "src/index.ts", 
+    "src/client.ts",
     "src/cli.ts", 
     "src/plugins/vite.ts", 
     "src/plugins/next.ts", 
