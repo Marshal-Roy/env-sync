@@ -21,7 +21,7 @@ program
 
 program
   .command("init")
-  .description("Scaffold envsync configuration in your project")
+  .description("Scaffold envsync configuration in your project based on existing .env or clean templates")
   .action(() => {
     console.log(pc.blue("Initializing EnvSync...\n"));
 
@@ -39,16 +39,61 @@ program
       else if (deps["react-scripts"]) framework = "cra";
     }
 
+    let clientPrefix = "";
+    if (framework === "nextjs") clientPrefix = "NEXT_PUBLIC_";
+    if (framework === "vite") clientPrefix = "VITE_";
+    if (framework === "cra") clientPrefix = "REACT_APP_";
+    if (framework === "sveltekit") clientPrefix = "PUBLIC_";
+    if (framework === "nuxt") clientPrefix = "NUXT_PUBLIC_";
+
+    // 2. Read existing .env file if available
+    const envPath = path.resolve(process.cwd(), ".env");
+    let existingEnv: Record<string, string> = {};
+    if (fs.existsSync(envPath)) {
+      const dotenv = require("dotenv");
+      existingEnv = dotenv.parse(fs.readFileSync(envPath, "utf-8"));
+    } else {
+      // Create an empty .env file without dummy content
+      fs.writeFileSync(envPath, "", "utf-8");
+      console.log(pc.green("✅ Created .env"));
+    }
+
+    // 3. Create envsync.config.ts
     const configPath = path.resolve(process.cwd(), "envsync.config.ts");
     if (fs.existsSync(configPath)) {
       console.log(pc.yellow("⚠️ envsync.config.ts already exists. Skipping config creation."));
     } else {
-      let clientPrefix = "";
-      if (framework === "nextjs") clientPrefix = "NEXT_PUBLIC_";
-      if (framework === "vite") clientPrefix = "VITE_";
-      if (framework === "cra") clientPrefix = "REACT_APP_";
-      if (framework === "sveltekit") clientPrefix = "PUBLIC_";
-      if (framework === "nuxt") clientPrefix = "NUXT_PUBLIC_";
+      const envKeys = Object.keys(existingEnv);
+      
+      const serverEntries: string[] = [];
+      const clientEntries: string[] = [];
+
+      for (const [key, value] of Object.entries(existingEnv)) {
+        let inferredType = "string";
+        if (value.toLowerCase() === "true" || value.toLowerCase() === "false") {
+          inferredType = "boolean";
+        } else if (!isNaN(Number(value)) && value.trim() !== "") {
+          inferredType = "number";
+        } else if (value.startsWith("http://") || value.startsWith("https://")) {
+          inferredType = "url";
+        }
+
+        const entry = `    ${key}: {\n      type: "${inferredType}",\n      required: true,\n    },`;
+
+        if (clientPrefix && key.startsWith(clientPrefix)) {
+          clientEntries.push(entry);
+        } else {
+          serverEntries.push(entry);
+        }
+      }
+
+      const serverBlock = serverEntries.length > 0
+        ? serverEntries.join("\n")
+        : `    /* Example Server Variable:\n    // PORT: {\n    //   type: "number",\n    //   default: 3000,\n    // },\n    */`;
+
+      const clientBlock = clientEntries.length > 0
+        ? clientEntries.join("\n")
+        : `    /* Example Client Variable:\n    // ${clientPrefix || "PUBLIC_"}API_URL: {\n    //   type: "url",\n    //   required: true,\n    // },\n    */`;
 
       const configTemplate = `import { SchemaConfig } from "envsync";
 
@@ -56,44 +101,15 @@ export default {
   framework: "${framework}",
   autoPrefix: false,
   server: {
-    DATABASE_URL: {
-      type: "string",
-      required: true,
-    },
-    PORT: {
-      type: "number",
-      default: 3000,
-    },
+${serverBlock}
   },
   client: {
-    ${clientPrefix}API_URL: {
-      type: "url",
-      required: true,
-    },
+${clientBlock}
   },
 } satisfies SchemaConfig;
 `;
       fs.writeFileSync(configPath, configTemplate, "utf-8");
-      console.log(pc.green("✅ Created envsync.config.ts"));
-    }
-
-    const envPath = path.resolve(process.cwd(), ".env");
-    if (fs.existsSync(envPath)) {
-      console.log(pc.yellow("⚠️ .env already exists. Skipping .env creation."));
-    } else {
-      let clientPrefix = "";
-      if (framework === "nextjs") clientPrefix = "NEXT_PUBLIC_";
-      if (framework === "vite") clientPrefix = "VITE_";
-      if (framework === "cra") clientPrefix = "REACT_APP_";
-      if (framework === "sveltekit") clientPrefix = "PUBLIC_";
-      if (framework === "nuxt") clientPrefix = "NUXT_PUBLIC_";
-
-      const envTemplate = `DATABASE_URL=postgres://localhost:5432/mydb
-PORT=3000
-${clientPrefix}API_URL=https://api.example.com
-`;
-      fs.writeFileSync(envPath, envTemplate, "utf-8");
-      console.log(pc.green("✅ Created .env"));
+      console.log(pc.green("✅ Created envsync.config.ts based on your environment"));
     }
 
     console.log(pc.blue("\nDone! Run `npx envsync build` to generate your typed environment files."));

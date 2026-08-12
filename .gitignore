@@ -7,3 +7,6 @@ coverage
 # Ignore spec and test folders as requested
 "EnvSync - Type-Safe Environment Management for Modern JavaScript Applications.md"
 test/
+nextjs-demo/
+examples/
+*.tgz

@@ -7,6 +7,8 @@ export interface NextPluginOptions {
   configPath?: string;
 }
 
+let isWatcherStarted = false;
+
 export function envsyncNextPlugin(options: NextPluginOptions = {}) {
   return (nextConfig: NextConfig): NextConfig => {
     // Run validation and code-gen during build and dev synchronously
@@ -28,18 +30,19 @@ export function envsyncNextPlugin(options: NextPluginOptions = {}) {
     // Return the updated next config
     return {
       ...nextConfig,
+      turbopack: (nextConfig as any)?.turbopack ?? {},
       webpack: (config, context) => {
-        if (context.dev && context.isServer) {
-          // In dev mode, run the watcher inside the webpack lifecycle
-          const watchPath = path.resolve(process.cwd(), "dist/watch.js");
-          if (fs.existsSync(watchPath)) {
-            import("file://" + watchPath).then(({ EnvSyncWatcher }) => {
+        if (context.dev && context.isServer && !isWatcherStarted) {
+          isWatcherStarted = true;
+          // In dev mode, run the watcher
+          import("../watch").then(({ EnvSyncWatcher }) => {
+            if (EnvSyncWatcher) {
               const watcher = new EnvSyncWatcher(options);
               watcher.start();
-            }).catch(err => {
-              console.error("Failed to load EnvSync watcher in Next.js", err);
-            });
-          }
+            }
+          }).catch(() => {
+            // Ignore watcher import errors in subprocesses
+          });
         }
         
         if (typeof nextConfig.webpack === "function") {
