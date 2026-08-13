@@ -1,5 +1,5 @@
 import type { Plugin } from "vite";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
@@ -15,12 +15,12 @@ export function envsyncVitePlugin(options: VitePluginOptions = {}): Plugin {
       const cliPath = path.resolve(process.cwd(), "node_modules/.bin/envsync");
       try {
         if (fs.existsSync(cliPath)) {
-          execSync(`${cliPath} build`, { stdio: "inherit" });
+          execFileSync(process.execPath, [cliPath, "build"], { stdio: "inherit" });
         } else {
           // Fallback if the local binary isn't linked yet (e.g., inside the monorepo)
           const localCli = path.resolve(process.cwd(), "dist/cli.js");
           if (fs.existsSync(localCli)) {
-             execSync(`node ${localCli} build`, { stdio: "inherit" });
+            execFileSync(process.execPath, [localCli, "build"], { stdio: "inherit" });
           }
         }
       } catch (e) {

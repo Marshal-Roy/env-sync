@@ -58,6 +58,25 @@ program
       console.log(pc.green("✅ Created .env"));
     }
 
+    // Ensure .env is listed in .gitignore to prevent accidental secret commits
+    const gitignorePath = path.resolve(process.cwd(), ".gitignore");
+    try {
+      const existingGitignore = fs.existsSync(gitignorePath)
+        ? fs.readFileSync(gitignorePath, "utf-8")
+        : "";
+      const lines = existingGitignore.split(/\r?\n/);
+      const alreadyIgnored = lines.some(l => l.trim() === ".env" || l.trim() === "*.env");
+      if (!alreadyIgnored) {
+        const appendContent = existingGitignore.endsWith("\n") || existingGitignore === ""
+          ? ".env\n"
+          : "\n.env\n";
+        fs.appendFileSync(gitignorePath, appendContent, "utf-8");
+        console.log(pc.green("✅ Added .env to .gitignore"));
+      }
+    } catch (e: any) {
+      console.warn(pc.yellow(`⚠️ Could not update .gitignore: ${e.message}`));
+    }
+
     // 3. Create envsync.config.ts
     const configPath = path.resolve(process.cwd(), "envsync.config.ts");
     if (fs.existsSync(configPath)) {
@@ -156,6 +175,81 @@ program
     const { EnvSyncWatcher } = await import("./watch");
     const watcher = new EnvSyncWatcher();
     await watcher.start();
+  });
+
+function inferType(value: string): string {
+  if (value.toLowerCase() === "true" || value.toLowerCase() === "false") return "boolean";
+  if (!isNaN(Number(value)) && value.trim() !== "") return "number";
+  if (value.startsWith("http://") || value.startsWith("https://")) return "url";
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed === "object" && parsed !== null) return "json";
+  } catch {}
+  return "string";
+}
+
+program
+  .command("diff <sourceA> <sourceB>")
+  .description("Compare two environment sources (e.g. .env.production .env.staging) and report structural drift")
+  .action((sourceA, sourceB) => {
+    console.log(pc.blue(`Comparing ${sourceA} vs ${sourceB}...\n`));
+
+    let envA: Record<string, string>;
+    let envB: Record<string, string>;
+
+    try {
+      envA = loadSources([{ type: "external", path: sourceA }]);
+    } catch (e: any) {
+      console.error(pc.red(`❌ Failed to load ${sourceA}: ${e.message}`));
+      process.exit(1);
+    }
+
+    try {
+      envB = loadSources([{ type: "external", path: sourceB }]);
+    } catch (e: any) {
+      console.error(pc.red(`❌ Failed to load ${sourceB}: ${e.message}`));
+      process.exit(1);
+    }
+
+    const keysA = new Set(Object.keys(envA));
+    const keysB = new Set(Object.keys(envB));
+    
+    const allKeys = Array.from(new Set([...keysA, ...keysB])).sort();
+
+    let hasDrift = false;
+
+    console.log(pc.bold("Environment Drift Report:\n"));
+
+    for (const key of allKeys) {
+      const inA = keysA.has(key);
+      const inB = keysB.has(key);
+
+      if (inA && !inB) {
+        console.log(`${pc.yellow("Missing")} - ${pc.bold(key)} is present in ${sourceA} but missing in ${sourceB}`);
+        hasDrift = true;
+      } else if (!inA && inB) {
+        console.log(`${pc.yellow("Missing")} - ${pc.bold(key)} is present in ${sourceB} but missing in ${sourceA}`);
+        hasDrift = true;
+      } else {
+        // Present in both, check type drift
+        const valA = envA[key];
+        const valB = envB[key];
+        const typeA = inferType(valA);
+        const typeB = inferType(valB);
+
+        if (typeA !== typeB) {
+          console.log(`${pc.magenta("Type Mismatch")} - ${pc.bold(key)} is ${pc.cyan(typeA)} in ${sourceA} but ${pc.cyan(typeB)} in ${sourceB}`);
+          hasDrift = true;
+        }
+      }
+    }
+
+    if (!hasDrift) {
+      console.log(pc.green("✅ No structural drift detected. Environments are perfectly aligned."));
+    } else {
+      console.log(`\n${pc.yellow("⚠️ Drift detected.")}`);
+      // Don't exit with error code, it's just a report
+    }
   });
 
 program.parse(process.argv);

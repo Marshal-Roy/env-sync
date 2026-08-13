@@ -13,7 +13,8 @@ EnvSync is a production-ready package that completely eliminates raw `process.en
 
 - **Type-Safe:** Full TypeScript autocomplete for your environment variables. Never guess what a variable is named again.
 - **Validation Engine:** Automatically coerces types (numbers, booleans, arrays, JSON) and validates formats (URLs, emails, enums).
-- **Security Boundaries:** Strictly separates `serverEnv` and `clientEnv` to ensure backend secrets never leak into client bundles.
+- **Security Boundaries & Secret-Scope Enforcement:** Strictly separates `serverEnv` and `clientEnv`. A powerful name-based heuristic (and a `sensitive: true` flag) completely blocks backend secrets from leaking into client bundles.
+- **Environment Drift Detection:** The built-in `envsync diff` command compares `.env` files (e.g. staging vs prod) and reports structural drift and type mismatches across environments.
 - **Framework Auto-Detection:** Automatically detects Next.js, Vite, Nuxt, SvelteKit, and Create React App, enforcing their mandatory variable prefixes (`NEXT_PUBLIC_`, `VITE_`, etc.).
 - **Live Watch Mode:** Edit your `.env` or schema file and your types are instantly regenerated.
 - **Zero-Config Integrations:** First-class plugins for Vite, Next.js, NestJS, Payload CMS, and Express.
@@ -84,6 +85,45 @@ fetch(`${clientEnv.NEXT_PUBLIC_API_URL}/users`);
 ```
 
 *(Note: `serverEnv` has a built-in runtime guard that will immediately throw an error if you accidentally import it into client-side code).*
+
+---
+
+## 🔒 Secret-Scope Enforcement
+
+EnvSync is the only environment tool that actively stops you from leaking secrets to the browser. 
+
+If you accidentally put a sensitive-looking variable (e.g. `DATABASE_URL`, `STRIPE_SECRET_KEY`) into the `client` block of your `envsync.config.ts`, the build will **hard-fail** with a clear error:
+> ❌ Client variable "STRIPE_SECRET_KEY" looks like a sensitive secret...
+
+**Escape Hatch:** If you have a key that matches the heuristic but is intentionally public (like a `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`), you can bypass the check by setting `sensitive: false`:
+```typescript
+client: {
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: { type: "string", required: true, sensitive: false }
+}
+```
+
+**Forced Enforcement:** Conversely, you can mark any non-suspiciously named variable as strictly sensitive to ensure it never touches the client:
+```typescript
+server: {
+  WEIRD_NAMED_VAR: { type: "string", sensitive: true }
+}
+```
+
+---
+
+## 🕵️ Environment Drift Detection
+
+Keep your environments aligned. Use `envsync diff` to compare two environment sources (like your local `.env` and a `.env.example`, or `.env.staging` and `.env.production`).
+
+```bash
+npx envsync diff .env.staging .env.production
+```
+
+EnvSync will heuristically parse both files and report:
+- **Missing Variables:** "PORT is present in .env.staging but missing in .env.production"
+- **Type Mismatches:** "PORT is a string in .env.staging but a number in .env.production"
+
+It's the easiest way to catch deployment issues before they happen!
 
 ---
 
@@ -158,6 +198,7 @@ console.log("Server config loaded!", serverEnv);
 | `required` | `boolean` | If `true`, the build fails if the variable is missing. |
 | `default` | `any` | Fallback value if the variable is missing. (Makes it optional). |
 | `values` | `string[]` | Required if `type` is `"enum"`. Specifies allowed values. |
+| `sensitive`| `boolean` | If `true`, hard-fails if placed in the client block. If `false`, bypasses the security heuristic that normally warns on sensitive-sounding keys (like `PUBLISHABLE_KEY`) in the client bundle. |
 
 ### Auto-Prefixing (Advanced)
 If you set `autoPrefix: true` in your config, EnvSync allows you to define your schema without framework prefixes (e.g., just `API_URL`). 
