@@ -7,12 +7,22 @@ export interface EnumFieldDef {
   values: string[];
   required?: boolean;
   default?: string;
+  /** 
+   * If true, hard-fails if placed in the client block. 
+   * If false, bypasses the sensitive-name heuristic.
+   */
+  sensitive?: boolean;
 }
 
 export interface BaseFieldDef {
   type: Exclude<FieldType, "enum">;
   required?: boolean;
   default?: any;
+  /** 
+   * If true, hard-fails if placed in the client block. 
+   * If false, bypasses the sensitive-name heuristic.
+   */
+  sensitive?: boolean;
 }
 
 export type FieldDef = BaseFieldDef | EnumFieldDef;

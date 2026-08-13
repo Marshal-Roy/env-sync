@@ -1,5 +1,14 @@
 import { ValidationContext, ValidationError, Framework } from "./types";
 
+/**
+ * Keys matching this pattern in the `client` block will trigger a hard error
+ * unless `sensitive: false` is explicitly set on the field definition.
+ * This catches accidental exposure of secrets (e.g. DATABASE_URL, JWT_SECRET)
+ * in client-side bundles where they'd be visible to anyone.
+ */
+const SENSITIVE_KEY_RE = /secret|token|key|password|private|credential|cert|auth/i;
+
+
 const PREFIX_MAP: Record<Exclude<Framework, "none">, string> = {
   nextjs: "NEXT_PUBLIC_",
   vite: "VITE_",
@@ -30,6 +39,21 @@ function levenshtein(a: string, b: string): number {
 export function validateField(ctx: ValidationContext): ValidationError[] {
   const errors: ValidationError[] = [];
   const { key, value, def, isClient, framework, autoPrefix } = ctx;
+
+  // Client secret leakage guard
+  const isSensitiveHeuristic = SENSITIVE_KEY_RE.test(key);
+  const isExplicitlySensitive = def.sensitive === true;
+  const isExplicitlySafe = def.sensitive === false;
+
+  if (isClient && !isExplicitlySafe && (isExplicitlySensitive || isSensitiveHeuristic)) {
+    errors.push({
+      key,
+      message: isExplicitlySensitive
+        ? `Client variable "${key}" is explicitly marked as \`sensitive: true\`. It cannot be in the "client" block.`
+        : `Client variable "${key}" looks like a sensitive secret (matches: secret|token|key|password|private|credential|cert|auth). ` +
+          `Move it to the "server" block, or set \`sensitive: false\` on this field if it is intentionally public.`,
+    });
+  }
 
   // Prefix validation
   if (isClient && framework && framework !== "none" && !autoPrefix) {
@@ -98,7 +122,10 @@ export function validateField(ctx: ValidationContext): ValidationError[] {
       break;
     case "url":
       try {
-        new URL(value as string);
+        const parsed = new URL(value as string);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          errors.push({ key, message: `${key} must be an http or https URL (got scheme: "${parsed.protocol}")` });
+        }
       } catch {
         errors.push({ key, message: `${key} must be a valid URL` });
       }
