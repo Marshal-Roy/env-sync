@@ -70,7 +70,7 @@ function serializeDefForRuntime(def: FieldDef): string {
  * zero runtime imports from the `envsync` package.
  */
 const INLINE_COERCE = `
-function __coerce(value, def) {
+function __coerce(value: string | undefined, def: { type: string, default?: unknown, values?: string[] }) {
   if (value === undefined || value === "") {
     return def.default !== undefined ? def.default : undefined;
   }
@@ -78,6 +78,7 @@ function __coerce(value, def) {
     case "string": case "url": case "email": case "enum": return value;
     case "number": { const n = Number(value); return isNaN(n) ? value : n; }
     case "boolean": {
+      if (typeof value !== "string") return value;
       const l = value.toLowerCase();
       if (l === "true" || l === "1" || l === "yes") return true;
       if (l === "false" || l === "0" || l === "no") return false;
@@ -85,8 +86,8 @@ function __coerce(value, def) {
     }
     case "array": {
       try {
-        if (value.startsWith("[") && value.endsWith("]")) return JSON.parse(value);
-        return value.split(",").map(v => v.trim()).filter(Boolean);
+        if (typeof value === "string" && value.startsWith("[") && value.endsWith("]")) return JSON.parse(value);
+        return typeof value === "string" ? value.split(",").map((v: string) => v.trim()).filter(Boolean) : value;
       } catch { return value; }
     }
     case "json": { try { return JSON.parse(value); } catch { return value; } }

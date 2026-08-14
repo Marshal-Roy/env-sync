@@ -79,10 +79,8 @@ export class EnvSyncWatcher extends EventEmitter {
     }
 
     try {
-      // Clear jiti cache to ensure we get fresh config on changes
-      const loadConfig = jiti(process.cwd(), { interopDefault: true });
-      // jiti caches by default, we can bypass cache by deleting it from require.cache
-      delete require.cache[require.resolve(configPath!)];
+      // Create a fresh jiti instance that explicitly disables caching
+      const loadConfig = jiti(process.cwd(), { interopDefault: true, requireCache: false });
       
       const config = loadConfig(configPath!) as SchemaConfig;
       const { server, client, success } = validateSchema(config);
