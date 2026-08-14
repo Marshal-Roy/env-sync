@@ -129,15 +129,18 @@ It's the easiest way to catch deployment issues before they happen!
 
 ## 🔌 Framework Integrations
 
-EnvSync comes with official plugins that automate the validation and watch cycles.
+While you can run `npx envsync build` manually, EnvSync provides official framework plugins. **Adding these plugins to your framework configuration (e.g. `next.config.js` or `vite.config.ts`) ensures that EnvSync automatically validates and generates your environment files globally every time you start your development server.**
 
 ### Next.js
-Wrap your `next.config.js`:
+Wrap your `next.config.js` (or `.ts`) to automatically run EnvSync during `next dev` and `next build`:
 ```javascript
 const { envsyncNextPlugin } = require("envsync/next");
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  // Optional: If you use a monorepo, you may need to transpile the package
+  // transpilePackages: ["envsync"] 
+};
 
 module.exports = envsyncNextPlugin()(nextConfig);
 ```
