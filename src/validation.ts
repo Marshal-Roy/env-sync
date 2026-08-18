@@ -111,8 +111,12 @@ export function validateField(ctx: ValidationContext): ValidationError[] {
       }
       break;
     case "json":
-      if (typeof value === "string") {
-        errors.push({ key, message: `${key} must be a valid JSON string` });
+      if (
+        typeof value !== "object" ||
+        value === null ||
+        Array.isArray(value)
+      ) {
+        errors.push({ key, message: `${key} must be a valid JSON object (plain key-value object, not a string, array, or primitive)` });
       }
       break;
     case "enum":
