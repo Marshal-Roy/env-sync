@@ -70,13 +70,18 @@ function serializeDefForRuntime(def: FieldDef): string {
  * zero runtime imports from the `envsync` package.
  */
 const INLINE_COERCE = `
+/** Accepts only plain integers/decimals — rejects hex, scientific, Infinity etc. */
+const __STRICT_NUM_RE = /^-?(\\d+\\.?\\d*|\\.\\d+)$/;
 function __coerce(value: string | undefined, def: { type: string, default?: unknown, values?: string[] }) {
   if (value === undefined || value === "") {
     return def.default !== undefined ? def.default : undefined;
   }
   switch (def.type) {
     case "string": case "url": case "email": case "enum": return value;
-    case "number": { const n = Number(value); return isNaN(n) ? value : n; }
+    case "number": {
+      if (!__STRICT_NUM_RE.test(value)) return value;
+      const n = Number(value); return isNaN(n) ? value : n;
+    }
     case "boolean": {
       if (typeof value !== "string") return value;
       const l = value.toLowerCase();

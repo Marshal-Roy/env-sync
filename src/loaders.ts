@@ -37,11 +37,25 @@ export function loadSources(sources: SourceDef[]): Record<string, string> {
       }
 
       if (fs.existsSync(dotenvPath)) {
-        const stat = fs.statSync(dotenvPath);
-        if (stat.size > MAX_FILE_SIZE_BYTES) {
-          throw new Error(`[EnvSync] dotenv file is too large (${stat.size} bytes): "${dotenvPath}"`);
+        // Resolve symlinks before the containment check so a symlink that
+        // lives inside the project root but points outside it can't escape.
+        let realDotenvPath: string;
+        try {
+          realDotenvPath = fs.realpathSync(dotenvPath);
+        } catch {
+          throw new Error(`[EnvSync] Could not resolve real path for dotenv file: "${dotenvPath}"`);
         }
-        const parsed = dotenv.parse(fs.readFileSync(dotenvPath, "utf-8"));
+        if (!realDotenvPath.startsWith(projectRoot + path.sep) && realDotenvPath !== projectRoot) {
+          throw new Error(
+            `[EnvSync] dotenv source path resolves outside the project root (possible symlink escape): "${realDotenvPath}". ` +
+            `Only paths inside "${projectRoot}" are allowed.`
+          );
+        }
+        const stat = fs.statSync(realDotenvPath);
+        if (stat.size > MAX_FILE_SIZE_BYTES) {
+          throw new Error(`[EnvSync] dotenv file is too large (${stat.size} bytes): "${realDotenvPath}"`);
+        }
+        const parsed = dotenv.parse(fs.readFileSync(realDotenvPath, "utf-8"));
         for (const [k, v] of Object.entries(parsed)) {
           if (!BLOCKED_KEYS.has(k)) {
             env[k] = v;
@@ -67,14 +81,29 @@ export function loadSources(sources: SourceDef[]): Record<string, string> {
         throw new Error(`[EnvSync] External source file not found: "${externalPath}"`);
       }
 
-      const stat = fs.statSync(externalPath);
-      if (stat.size > MAX_FILE_SIZE_BYTES) {
-        throw new Error(`[EnvSync] External source file is too large (${stat.size} bytes): "${externalPath}"`);
+      // Resolve symlinks before the containment check so a symlink inside
+      // the project root that points outside it cannot escape the boundary.
+      let realExternalPath: string;
+      try {
+        realExternalPath = fs.realpathSync(externalPath);
+      } catch {
+        throw new Error(`[EnvSync] Could not resolve real path for external source: "${externalPath}"`);
+      }
+      if (!realExternalPath.startsWith(projectRoot + path.sep) && realExternalPath !== projectRoot) {
+        throw new Error(
+          `[EnvSync] External source path resolves outside the project root (possible symlink escape): "${realExternalPath}". ` +
+          `Only paths inside "${projectRoot}" are allowed.`
+        );
       }
 
-      const content = fs.readFileSync(externalPath, "utf-8");
+      const stat = fs.statSync(realExternalPath);
+      if (stat.size > MAX_FILE_SIZE_BYTES) {
+        throw new Error(`[EnvSync] External source file is too large (${stat.size} bytes): "${realExternalPath}"`);
+      }
 
-      if (externalPath.endsWith(".json")) {
+      const content = fs.readFileSync(realExternalPath, "utf-8");
+
+      if (realExternalPath.endsWith(".json")) {
         let parsed: unknown;
         try {
           parsed = JSON.parse(content);

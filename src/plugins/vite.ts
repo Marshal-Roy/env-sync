@@ -1,32 +1,20 @@
 import type { Plugin } from "vite";
-import { execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import { runEnvSyncBuild } from "./utils";
 
 export interface VitePluginOptions {
   configPath?: string;
 }
 
+let isWatcherStarted = false;
+
 export function envsyncVitePlugin(options: VitePluginOptions = {}): Plugin {
   return {
-    name: "envsync",
-    configResolved() {
-      // Run the envsync build process synchronously to ensure envs are built before Vite proceeds
-      const cliPath = path.resolve(process.cwd(), "node_modules/.bin/envsync");
-      try {
-        if (fs.existsSync(cliPath)) {
-          execFileSync(process.execPath, [cliPath, "build"], { stdio: "inherit" });
-        } else {
-          // Fallback if the local binary isn't linked yet (e.g., inside the monorepo)
-          const localCli = path.resolve(process.cwd(), "dist/cli.js");
-          if (fs.existsSync(localCli)) {
-            execFileSync(process.execPath, [localCli, "build"], { stdio: "inherit" });
-          }
-        }
-      } catch (e) {
-        console.error("❌ EnvSync build failed. Vite startup aborted.");
-        process.exit(1);
-      }
+    name: "envsync-vite",
+    config() {
+      // Run validation and code-gen during build and dev synchronously
+      runEnvSyncBuild("Vite");
     },
     configureServer(server) {
       // In dev mode, start the watcher

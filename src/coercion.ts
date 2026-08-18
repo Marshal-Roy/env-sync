@@ -1,5 +1,12 @@
 import { FieldDef } from "./types";
 
+/**
+ * Strict numeric regex: accepts only plain integers and decimals.
+ * Explicitly rejects hex (0x...), scientific (1e10), Infinity, -Infinity, NaN,
+ * and purely whitespace — all of which Number() would accept.
+ */
+const STRICT_NUMBER_RE = /^-?(\d+\.?\d*|\.\d+)$/;
+
 export function coerceValue(value: string | undefined, def: FieldDef): any {
   if (value === undefined || value === "") {
     return def.default !== undefined ? def.default : undefined;
@@ -13,6 +20,10 @@ export function coerceValue(value: string | undefined, def: FieldDef): any {
       return value;
 
     case "number": {
+      if (!STRICT_NUMBER_RE.test(value)) {
+        // Return the raw string — validation will reject it with a clear error
+        return value;
+      }
       const num = Number(value);
       return isNaN(num) ? value : num;
     }

@@ -1,7 +1,5 @@
 import type { NextConfig } from "next";
-import { execFileSync } from "child_process";
-import fs from "fs";
-import path from "path";
+import { runEnvSyncBuild } from "./utils";
 
 export interface NextPluginOptions {
   configPath?: string;
@@ -12,20 +10,7 @@ let isWatcherStarted = false;
 export function envsyncNextPlugin(options: NextPluginOptions = {}) {
   return (nextConfig: NextConfig): NextConfig => {
     // Run validation and code-gen during build and dev synchronously
-    const cliPath = path.resolve(process.cwd(), "node_modules/.bin/envsync");
-    try {
-      if (fs.existsSync(cliPath)) {
-        execFileSync(process.execPath, [cliPath, "build"], { stdio: "inherit" });
-      } else {
-        const localCli = path.resolve(process.cwd(), "dist/cli.js");
-        if (fs.existsSync(localCli)) {
-          execFileSync(process.execPath, [localCli, "build"], { stdio: "inherit" });
-        }
-      }
-    } catch (e) {
-      console.error("❌ EnvSync build failed. Next.js startup aborted.");
-      process.exit(1);
-    }
+    runEnvSyncBuild("Next.js");
 
     // Return the updated next config
     return {
