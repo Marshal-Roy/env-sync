@@ -4,7 +4,7 @@ import pc from "picocolors";
 import fs from "fs";
 import path from "path";
 import { generateServerEnv, generateClientEnv } from "./generator";
-import { validateSchema, printErrors } from "./engine";
+import { validateSchema, printErrors, printWarnings } from "./engine";
 import { SchemaConfig, ValidationResult } from "./types";
 // using jiti for config loading
 import jiti from "jiti";
@@ -84,6 +84,8 @@ export class EnvSyncWatcher extends EventEmitter {
       
       const config = loadConfig(configPath!) as SchemaConfig;
       const { server, client, success } = validateSchema(config);
+      
+      printWarnings(server.warnings, client.warnings);
       
       if (!success) {
         printErrors(server.errors, client.errors);
