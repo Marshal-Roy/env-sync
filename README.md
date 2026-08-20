@@ -15,6 +15,8 @@ EnvSync is a production-ready package that completely eliminates raw `process.en
 - **Validation Engine:** Automatically coerces types (numbers, booleans, arrays, JSON) and validates formats (URLs, emails, enums).
 - **Security Boundaries & Secret-Scope Enforcement:** Strictly separates `serverEnv` and `clientEnv`. A powerful name-based heuristic (and a `sensitive: true` flag) completely blocks backend secrets from leaking into client bundles.
 - **Environment Drift Detection:** The built-in `envsync diff` command compares `.env` files (e.g. staging vs prod) and reports structural drift and type mismatches across environments.
+- **Dead Secret Detection:** Statically scan your codebase with `envsync clean` to instantly identify stale environment variables defined in your schema but never used in code.
+- **Expiration Warnings:** Add `expiresAt` deadlines to your secrets (like Stripe/API keys) to get proactive warnings in your terminal when they expire or approach expiration.
 - **Framework Auto-Detection:** Automatically detects Next.js, Vite, Nuxt, SvelteKit, and Create React App, enforcing their mandatory variable prefixes (`NEXT_PUBLIC_`, `VITE_`, etc.).
 - **Live Watch Mode:** Edit your `.env` or schema file and your types are instantly regenerated.
 - **Zero-Config Integrations:** First-class plugins for Vite, Next.js, NestJS, Payload CMS, and Express.
@@ -127,6 +129,31 @@ It's the easiest way to catch deployment issues before they happen!
 
 ---
 
+## 🧹 Dead Secret Detection (`envsync clean`)
+
+Clean up stale configuration. As projects evolve, environment variables are often left defined in config files but are no longer referenced in code. 
+
+Run `envsync clean` to statically scan your codebase (supporting `.ts`, `.tsx`, `.js`, `.jsx`, `.svelte`, `.vue`, `.astro` files) for references to your defined variables:
+
+```bash
+npx envsync clean
+```
+
+If any defined variables are not referenced, EnvSync will flag them:
+```text
+Scanning for unused environment variables in src...
+
+⚠️ Found 2 unused environment variable(s):
+  - NODE (server)
+  - STAGING (server)
+
+These variables are defined in your envsync.config.ts but were not found in any source files.
+```
+
+You can optionally specify a target directory to scan (e.g., `npx envsync clean ./lib`).
+
+---
+
 ## 🔌 Framework Integrations
 
 While you can run `npx envsync build` manually, EnvSync provides official framework plugins. **Adding these plugins to your framework configuration (e.g. `next.config.js` or `vite.config.ts`) ensures that EnvSync automatically validates and generates your environment files globally every time you start your development server.**
@@ -202,6 +229,8 @@ console.log("Server config loaded!", serverEnv);
 | `default` | `any` | Fallback value if the variable is missing. (Makes it optional). |
 | `values` | `string[]` | Required if `type` is `"enum"`. Specifies allowed values. |
 | `sensitive`| `boolean` | If `true`, hard-fails if placed in the client block. If `false`, bypasses the security heuristic that normally warns on sensitive-sounding keys (like `PUBLISHABLE_KEY`) in the client bundle. |
+| `description`| `string` | Optional human-readable description explaining what the variable is used for. |
+| `expiresAt` | `string` | Optional expiration date in `YYYY-MM-DD` format. Triggers build/watch warnings in the terminal when the date is past or within 30 days of expiring. |
 
 ### Auto-Prefixing (Advanced)
 If you set `autoPrefix: true` in your config, EnvSync allows you to define your schema without framework prefixes (e.g., just `API_URL`). 

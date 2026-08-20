@@ -4,7 +4,7 @@ import pc from "picocolors";
 import fs from "fs";
 import path from "path";
 import { generateServerEnv, generateClientEnv } from "./generator";
-import { validateSchema, printErrors } from "./engine";
+import { validateSchema, printErrors, printWarnings } from "./engine";
 import { SchemaConfig, Framework } from "./types";
 import { loadSources } from "./loaders";
 
@@ -154,6 +154,10 @@ program
     }
 
     const { server, client, success } = validateSchema(config);
+    
+    // Print metadata warnings (expiration, etc.)
+    printWarnings(server.warnings, client.warnings);
+
     if (!success) {
       printErrors(server.errors, client.errors);
       process.exit(1);
@@ -249,6 +253,134 @@ program
     } else {
       console.log(`\n${pc.yellow("⚠️ Drift detected.")}`);
       // Don't exit with error code, it's just a report
+    }
+  });
+
+function getFilesRecursive(dir: string, excludeDirs: Set<string>): string[] {
+  let results: string[] = [];
+  if (!fs.existsSync(dir)) return results;
+  let list: string[];
+  try {
+    list = fs.readdirSync(dir);
+  } catch {
+    return results;
+  }
+  for (const file of list) {
+    const filePath = path.resolve(dir, file);
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(filePath);
+    } catch {
+      continue;
+    }
+    if (stat.isDirectory()) {
+      if (excludeDirs.has(file) || excludeDirs.has(filePath)) continue;
+      results = results.concat(getFilesRecursive(filePath, excludeDirs));
+    } else {
+      const ext = path.extname(file);
+      if ([".ts", ".tsx", ".js", ".jsx", ".svelte", ".vue", ".astro"].includes(ext)) {
+        results.push(filePath);
+      }
+    }
+  }
+  return results;
+}
+
+program
+  .command("clean [dir]")
+  .description("Statically analyze codebase to find unused (dead) environment variables defined in schema")
+  .action((dir) => {
+    const configPath = path.resolve(process.cwd(), "envsync.config.ts");
+    if (!fs.existsSync(configPath)) {
+      console.error(pc.red("❌ envsync.config.ts not found. Run `npx envsync init` first."));
+      process.exit(1);
+    }
+
+    let config: SchemaConfig;
+    try {
+      config = loadConfig(configPath) as SchemaConfig;
+    } catch (e: any) {
+      console.error(pc.red("❌ Failed to load envsync.config.ts"));
+      console.error(e.message);
+      process.exit(1);
+    }
+
+    const serverKeys = config.server ? Object.keys(config.server) : [];
+    const clientKeys = config.client ? Object.keys(config.client) : [];
+    const allKeys = [...serverKeys, ...clientKeys];
+
+    if (allKeys.length === 0) {
+      console.log(pc.green("No environment variables defined in schema."));
+      return;
+    }
+
+    const defaultDir = fs.existsSync(path.resolve(process.cwd(), "src")) ? "src" : ".";
+    const scanDirName = dir || defaultDir;
+    const scanDir = path.resolve(process.cwd(), scanDirName);
+
+    console.log(pc.blue(`Scanning for unused environment variables in ${scanDirName}...\n`));
+
+    const exclude = new Set([
+      "node_modules", "dist", ".git", ".next", ".svelte-kit", ".nuxt", "out", "build", "coverage",
+      path.resolve(process.cwd(), "src/config"),
+      path.resolve(process.cwd(), "envsync.config.ts")
+    ]);
+
+    const files = getFilesRecursive(scanDir, exclude);
+    
+    const keyState = new Map<string, "unused" | "commented" | "active">();
+    for (const key of allKeys) {
+      keyState.set(key, "unused");
+    }
+
+    function stripComments(content: string): string {
+      return content
+        .replace(/\/\/[^\n]*/g, " ")
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/<!--[\s\S]*?-->/g, " ");
+    }
+
+    for (const file of files) {
+      if (file === configPath || file.includes(path.join("src", "config"))) {
+        continue;
+      }
+      try {
+        const content = fs.readFileSync(file, "utf-8");
+        const stripped = stripComments(content);
+        
+        for (const key of allKeys) {
+          const currentState = keyState.get(key);
+          if (currentState === "active") continue;
+
+          const regex = new RegExp(`\\b${key}\\b`);
+          if (regex.test(stripped)) {
+            keyState.set(key, "active");
+          } else if (regex.test(content)) {
+            keyState.set(key, "commented");
+          }
+        }
+      } catch {
+        // Ignore read errors
+      }
+    }
+
+    const unusedOrCommentedKeys: { key: string; state: "unused" | "commented" }[] = [];
+    for (const [key, state] of keyState.entries()) {
+      if (state !== "active") {
+        unusedOrCommentedKeys.push({ key, state });
+      }
+    }
+
+    if (unusedOrCommentedKeys.length === 0) {
+      console.log(pc.green("✅ All defined environment variables are referenced in your codebase."));
+    } else {
+      console.log(pc.yellow(`⚠️ Found ${unusedOrCommentedKeys.length} unused environment variable(s):`));
+      for (const { key, state } of unusedOrCommentedKeys) {
+        const isClient = clientKeys.includes(key);
+        const label = state === "commented" ? " (commented out)" : "";
+        console.log(pc.yellow(`  - ${pc.bold(key)} (${isClient ? "client" : "server"})${pc.bold(label)}`));
+      }
+      console.log(pc.gray("\nThese variables are defined in your envsync.config.ts but were not found active in any source files."));
     }
   });
 

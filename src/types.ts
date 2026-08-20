@@ -12,6 +12,10 @@ export interface EnumFieldDef {
    * If false, bypasses the sensitive-name heuristic.
    */
   sensitive?: boolean;
+  /** Human-readable explanation of this variable */
+  description?: string;
+  /** Expiration date in YYYY-MM-DD format */
+  expiresAt?: string;
 }
 
 export interface BaseFieldDef {
@@ -23,6 +27,10 @@ export interface BaseFieldDef {
    * If false, bypasses the sensitive-name heuristic.
    */
   sensitive?: boolean;
+  /** Human-readable explanation of this variable */
+  description?: string;
+  /** Expiration date in YYYY-MM-DD format */
+  expiresAt?: string;
 }
 
 export type FieldDef = BaseFieldDef | EnumFieldDef;
@@ -54,8 +62,14 @@ export interface ValidationError {
   message: string;
 }
 
+export interface ValidationWarning {
+  key: string;
+  message: string;
+}
+
 export interface ValidationResult {
   valid: boolean;
   errors: ValidationError[];
+  warnings: ValidationWarning[];
   data: Record<string, any>;
 }

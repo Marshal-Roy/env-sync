@@ -1,7 +1,7 @@
 import pc from "picocolors";
-import { SchemaConfig, SourceDef, ValidationResult, ValidationError, ValidationContext } from "./types";
+import { SchemaConfig, SourceDef, ValidationResult, ValidationError, ValidationWarning, ValidationContext } from "./types";
 import { coerceValue } from "./coercion";
-import { validateField } from "./validation";
+import { validateField, validateMetadata } from "./validation";
 import { loadSources } from "./loaders";
 
 export function validateSchema(config: SchemaConfig, sources?: SourceDef[]): { server: ValidationResult, client: ValidationResult, success: boolean } {
@@ -12,8 +12,8 @@ export function validateSchema(config: SchemaConfig, sources?: SourceDef[]): { s
   ];
 
   const rawEnv = loadSources(activeSources);
-  const serverResult: ValidationResult = { valid: true, errors: [], data: {} };
-  const clientResult: ValidationResult = { valid: true, errors: [], data: {} };
+  const serverResult: ValidationResult = { valid: true, errors: [], warnings: [], data: {} };
+  const clientResult: ValidationResult = { valid: true, errors: [], warnings: [], data: {} };
 
   const framework = config.framework || "none";
   const autoPrefix = config.autoPrefix ?? false;
@@ -38,6 +38,11 @@ export function validateSchema(config: SchemaConfig, sources?: SourceDef[]): { s
         serverResult.errors.push(...errors);
       } else if (coercedValue !== undefined) {
         serverResult.data[key] = coercedValue;
+      }
+
+      const warnings = validateMetadata(key, def);
+      if (warnings.length > 0) {
+        serverResult.warnings.push(...warnings);
       }
     }
   }
@@ -79,6 +84,11 @@ export function validateSchema(config: SchemaConfig, sources?: SourceDef[]): { s
       } else if (coercedValue !== undefined) {
         clientResult.data[key] = coercedValue;
       }
+
+      const warnings = validateMetadata(key, def);
+      if (warnings.length > 0) {
+        clientResult.warnings.push(...warnings);
+      }
     }
   }
 
@@ -105,6 +115,22 @@ export function printErrors(serverErrors: ValidationError[], clientErrors: Valid
   }
 }
 
+export function printWarnings(serverWarnings: ValidationWarning[], clientWarnings: ValidationWarning[]) {
+  if (serverWarnings.length > 0) {
+    console.warn(pc.yellow(pc.bold("\n⚠️ Server Environment Warnings:")));
+    for (const warn of serverWarnings) {
+      console.warn(pc.yellow(`  - [${warn.key}]: ${warn.message}`));
+    }
+  }
+
+  if (clientWarnings.length > 0) {
+    console.warn(pc.yellow(pc.bold("\n⚠️ Client Environment Warnings:")));
+    for (const warn of clientWarnings) {
+      console.warn(pc.yellow(`  - [${warn.key}]: ${warn.message}`));
+    }
+  }
+}
+
 import jiti from "jiti";
 import path from "path";
 import fs from "fs";
@@ -117,6 +143,9 @@ export function loadEnv(configPath?: string) {
   const loadConfig = jiti(process.cwd(), { interopDefault: true });
   const config = loadConfig(p) as SchemaConfig;
   const { server, client, success } = validateSchema(config);
+  
+  // Print warnings if any exist, even if validation succeeds
+  printWarnings(server.warnings, client.warnings);
   
   if (!success) {
     printErrors(server.errors, client.errors);

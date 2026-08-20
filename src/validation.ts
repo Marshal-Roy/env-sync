@@ -1,4 +1,4 @@
-import { ValidationContext, ValidationError, Framework } from "./types";
+import { ValidationContext, ValidationError, ValidationWarning, FieldDef, Framework } from "./types";
 
 /**
  * Keys matching this pattern in the `client` block will trigger a hard error
@@ -142,4 +142,47 @@ export function validateField(ctx: ValidationContext): ValidationError[] {
   }
 
   return errors;
+}
+
+export function validateMetadata(key: string, def: FieldDef): ValidationWarning[] {
+  const warnings: ValidationWarning[] = [];
+  if (def.expiresAt) {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(def.expiresAt)) {
+      warnings.push({
+        key,
+        message: `Invalid expiresAt date format "${def.expiresAt}". Use YYYY-MM-DD.`,
+      });
+      return warnings;
+    }
+
+    const expiryDate = new Date(def.expiresAt + "T00:00:00");
+    if (isNaN(expiryDate.getTime())) {
+      warnings.push({
+        key,
+        message: `Invalid expiresAt date "${def.expiresAt}".`,
+      });
+      return warnings;
+    }
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (expiryDate < today) {
+      warnings.push({
+        key,
+        message: `Variable has expired (expiration date: ${def.expiresAt}).`,
+      });
+    } else {
+      const msDiff = expiryDate.getTime() - today.getTime();
+      const daysDiff = Math.ceil(msDiff / (1000 * 60 * 60 * 24));
+      if (daysDiff <= 30) {
+        warnings.push({
+          key,
+          message: `Variable will expire soon on ${def.expiresAt} (in ${daysDiff} day${daysDiff === 1 ? "" : "s"}).`,
+        });
+      }
+    }
+  }
+  return warnings;
 }
